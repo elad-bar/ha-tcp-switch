@@ -1,0 +1,8 @@
+{
+    "domain": "tcp_switch",
+    "name": "TCP Switch Integration",
+    "documentation": "https://github.com/elad-bar/ha-tcp-switch/blob/master/README.md",
+    "dependencies": [],
+    "codeowners": ["@elad-bar"],
+    "requirements": []
+}
