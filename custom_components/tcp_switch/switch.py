@@ -9,6 +9,7 @@ import voluptuous as vol
 from homeassistant.components.switch import SwitchDevice, DOMAIN
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 import homeassistant.helpers.config_validation as cv
+from homeassistant.util import slugify
 
 from homeassistant.const import (CONF_NAME, CONF_HOST, CONF_PORT,
                                  EVENT_HOMEASSISTANT_START,
@@ -44,8 +45,8 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
         add_entities(devices, True)
 
         # register service
-        hass.services.register(DOMAIN, 'connect', connection.tcp_switch_connect)
-        hass.services.register(DOMAIN, 'disconnect', connection.tcp_switch_disconnect)
+        hass.services.register(slugify(NAME), 'connect', connection.tcp_switch_connect)
+        hass.services.register(slugify(NAME), 'disconnect', connection.tcp_switch_disconnect)
 
         hass.bus.listen_once(EVENT_HOMEASSISTANT_START, connection.tcp_switch_connect)
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, connection.tcp_switch_disconnect)
