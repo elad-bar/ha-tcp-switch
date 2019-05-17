@@ -102,21 +102,28 @@ class TcpSwitch(SwitchDevice):
         self._momentary_delay = momentary_delay
         self._socket = None
         self._connected = False
+        self._connecting = False
 
         self._host_details = f'{NAME} {self._server_name}:{self._server_port} CH#{self._channel}'
 
     def connect(self):
         try:
-            if not self._connected:
+            if not self._connected and not self._connecting:
+                self._connecting = True
+
                 _LOGGER.info(f"Connecting to {self._host_details}")
+
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._socket.connect((self._server_name, self._server_port))
                 self._connected = True
+
                 _LOGGER.info(f"{self._host_details} connected")
 
         except Exception as ex:
             _LOGGER.error(f'Failed to connect {self._host_details}, Error: {str(ex)}')
             self._connected = False
+        finally:
+            self._connecting = False
 
     def disconnect(self):
         try:
@@ -168,27 +175,28 @@ class TcpSwitch(SwitchDevice):
         error_message = f'Cannot send {self._host_details} message: {message}'
 
         try:
-            if not self.is_connected:
-                self.connect()
+            if not self._connecting:
+                if not self.is_connected:
+                    self.connect()
 
-            if self.is_connected:
-                _LOGGER.debug(f'Sending {message}')
+                if self.is_connected:
+                    _LOGGER.debug(f'Sending {message}')
 
-                self._socket.send(message.encode('utf-8'))
+                    self._socket.send(message.encode('utf-8'))
 
-                _LOGGER.debug("Getting data")
+                    _LOGGER.debug("Getting data")
 
-                data = str(self._socket.recv(BUFFER))
+                    data = str(self._socket.recv(BUFFER))
 
-                channel_id = self._channel - 1
+                    channel_id = self._channel - 1
 
-                _LOGGER.debug(f'Parsing {data}')
+                    _LOGGER.debug(f'Parsing {data}')
 
-                status = data[channel_id]
+                    status = data[channel_id]
 
-                result = status == "1"
-            else:
-                _LOGGER.error(f'{error_message}')
+                    result = status == "1"
+                else:
+                    _LOGGER.error(f'{error_message}')
 
         except Exception as ex:
             self.disconnect()
