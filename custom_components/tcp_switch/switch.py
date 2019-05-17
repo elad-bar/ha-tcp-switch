@@ -4,7 +4,6 @@ For more details about this platform, please refer to the documentation at
 https://home-assistant.io/components/switch.vera/
 """
 import logging
-import socket
 
 import voluptuous as vol
 from homeassistant.components.switch import SwitchDevice, DOMAIN
@@ -17,6 +16,7 @@ from homeassistant.const import (CONF_NAME, CONF_HOST, CONF_PORT,
 from homeassistant.helpers.event import track_time_interval
 
 from .const import *
+from .connection import TcpSwitchConnection
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,55 +31,27 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the TCP switches."""
-    scan_interval = SCAN_INTERVAL
-
     try:
-        switch_name = config.get(CONF_NAME)
-        server_name = config.get(CONF_HOST)
-        server_port = config.get(CONF_PORT)
-        momentary_delay = config.get(CONF_MOMENTARY_DELAY)
-        channels = config.get(CONF_CHANNELS)
-        scan_interval_seconds = scan_interval.total_seconds()
+        _LOGGER.info(f'Loading configuration of TCP Switch, DI: {discovery_info}')
 
-        if 0 < momentary_delay < scan_interval_seconds:
-            scan_interval = timedelta(seconds=momentary_delay)
-
-        _LOGGER.info(f'Starting to initialize {switch_name} - {server_name}:{server_port} with {channels} channels')
+        connection = TcpSwitchConnection(config)
 
         devices = []
-        for channel in range(channels):
-            device = TcpSwitch(switch_name, server_name, server_port, channel + 1, momentary_delay)
+        for channel in range(connection.channels):
+            device = TcpSwitch(connection, channel)
             devices.append(device)
 
         add_entities(devices, True)
 
-        def tcp_switch_refresh(event_time):
-            """Call TCP Switch to refresh information."""
-            _LOGGER.debug(f'Updating TCP Switch, at {event_time}')
-            for device_item in devices:
-                device_item.update()
-
-        def tcp_switch_connect(event_time):
-            """Call TCP Switch to connect and update."""
-            _LOGGER.debug(f'Connecting and updating TCP Switch, at {event_time}')
-            for device_item in devices:
-                device_item.update()
-
-        def tcp_switch_disconnect(event_time):
-            """Call TCP Switch to disconnect."""
-            _LOGGER.debug(f'Disconnecting TCP Switch, at {event_time}')
-            for device_item in devices:
-                device_item.disconnect()
-
         # register service
-        hass.services.register(DOMAIN, 'connect', tcp_switch_connect)
-        hass.services.register(DOMAIN, 'disconnect', tcp_switch_disconnect)
+        hass.services.register(DOMAIN, 'connect', connection.tcp_switch_connect)
+        hass.services.register(DOMAIN, 'disconnect', connection.tcp_switch_disconnect)
 
-        hass.bus.listen_once(EVENT_HOMEASSISTANT_START, tcp_switch_connect)
-        hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, tcp_switch_disconnect)
+        hass.bus.listen_once(EVENT_HOMEASSISTANT_START, connection.tcp_switch_connect)
+        hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, connection.tcp_switch_disconnect)
 
         # register scan interval for Home Automation Manager (HAM)
-        track_time_interval(hass, tcp_switch_refresh, scan_interval)
+        track_time_interval(hass, connection.tcp_switch_refresh, connection.scan_interval)
 
         return True
 
@@ -92,74 +64,29 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 class TcpSwitch(SwitchDevice):
     """Representation of a Vera Switch."""
 
-    def __init__(self, switch_name, server_name, server_port, channel, momentary_delay):
+    def __init__(self, connection, channel):
         """Initialize the Vera device."""
-        self._state = False
         self._channel = channel
-        self._server_name = server_name
-        self._server_port = server_port
-        self._switch_name = switch_name
-        self._momentary_delay = momentary_delay
-        self._socket = None
-        self._connected = False
-        self._connecting = False
-
-        self._host_details = f'{NAME} {self._server_name}:{self._server_port} CH#{self._channel}'
-
-    def connect(self):
-        try:
-            if not self._connected and not self._connecting:
-                self._connecting = True
-
-                _LOGGER.info(f"Connecting to {self._host_details}")
-
-                self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._socket.connect((self._server_name, self._server_port))
-                self._connected = True
-
-                _LOGGER.info(f"{self._host_details} connected")
-
-        except Exception as ex:
-            _LOGGER.error(f'Failed to connect {self._host_details}, Error: {str(ex)}')
-            self._connected = False
-        finally:
-            self._connecting = False
-
-    def disconnect(self):
-        try:
-            _LOGGER.info(f"Disconnecting from {self._host_details}")
-            self._socket.close()
-
-        except Exception as ex:
-            _LOGGER.error(f'Failed to disconnect {self._host_details}, Error: {str(ex)}')
-
-        finally:
-            self._socket = None
-            self._connected = False
-
-            _LOGGER.info(f"{self._host_details} connection terminated")
+        self._connection = connection
+        self._switch_name = self._connection.switch_name
+        self._state = False
 
     def turn_on(self, **kwargs):
         """Turn device on."""
-        self.toggle(True)
+        self._connection.toggle(True, self._channel)
 
         self.schedule_update_ha_state()
 
     def turn_off(self, **kwargs):
         """Turn device off."""
-        self.toggle(False)
+        self._connection.toggle(False, self._channel)
 
         self.schedule_update_ha_state()
 
     @property
-    def is_connected(self):
-        """Return the name of this camera."""
-        return self._connected
-
-    @property
     def name(self):
         """Return the name of this camera."""
-        return f'{self._switch_name} CH{self._channel}'
+        return f'{self._switch_name} CH{self._channel + 1}'
 
     @property
     def is_on(self):
@@ -168,53 +95,4 @@ class TcpSwitch(SwitchDevice):
 
     def update(self):
         """Update device state."""
-        self._state = self.send_tcp_message(STATUS_COMMAND)
-
-    def send_tcp_message(self, message):
-        result = None
-        error_message = f'Cannot send {self._host_details} message: {message}'
-
-        try:
-            if not self._connecting:
-                if not self.is_connected:
-                    self.connect()
-
-                if self.is_connected:
-                    _LOGGER.debug(f'Sending {message}')
-
-                    self._socket.send(message.encode('utf-8'))
-
-                    _LOGGER.debug("Getting data")
-
-                    data = str(self._socket.recv(BUFFER))
-
-                    channel_id = self._channel - 1
-
-                    _LOGGER.debug(f'Parsing {data}')
-
-                    status = data[channel_id]
-
-                    result = status == "1"
-                else:
-                    _LOGGER.error(f'{error_message}')
-
-        except Exception as ex:
-            self.disconnect()
-
-            _LOGGER.error(f'{error_message}, Error: {str(ex)}')
-
-        return result
-
-    def toggle(self, turn_on):
-        cmd = '2'
-        delay = ""
-
-        if turn_on:
-            cmd = '1'
-
-        if self._momentary_delay > 0:
-            delay = f':{self._momentary_delay}'
-
-        data = f'{cmd}{str(self._channel)}{delay}'
-
-        self._state = self.send_tcp_message(data)
+        self._state = self._connection.get_status(self._channel)
