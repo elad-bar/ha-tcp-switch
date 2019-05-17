@@ -1,4 +1,2 @@
-connect:
+reconnect:
   description: "Creates TCP Switch socket connection"
-disconnect:
-  description: "Terminates TCP Switch socket connection"

@@ -23,7 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_HOST): cv.string,
     vol.Required(CONF_NAME): cv.string,
-    vol.Optional(CONF_CHANNELS, default=DEFAULT_CHANNELS): cv.byte,
+    vol.Optional(CONF_CHANNELS, default=[]):
+        vol.All(cv.ensure_list, [cv.byte]),
     vol.Optional(CONF_PORT, default=DEFAULT_PORT): cv.port,
     vol.Optional(CONF_MOMENTARY_DELAY, default=DEFAULT_MOMENTARY_DELAY): cv.byte
 })
@@ -31,41 +32,41 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
 
 def setup_platform(hass, config, add_entities, discovery_info=None):
     """Set up the TCP switches."""
+    is_initialized = False
+
     try:
-        _LOGGER.info(f'Loading configuration of TCP Switch, DI: {discovery_info}')
+        _LOGGER.info(f'Loading configuration of {NAME}, DI: {discovery_info}')
 
-        scan_interval = SCAN_INTERVAL
+        manager = TcpSwitchConnection(config)
 
-        connection = TcpSwitchConnection(config)
-
-        devices = []
-        for channel in range(connection.channels):
-            device = TcpSwitch(connection, channel)
-            devices.append(device)
-
-        add_entities(devices, True)
-
-        def tcp_switch_refresh(event_time):
-            _LOGGER.debug(f"Updating TCP Switch ({event_time})")
+        def ts_update(event_time):
+            _LOGGER.debug(f"Updating {NAME} ({event_time})")
             for switch in devices:
                 switch.update()
 
-        # register service
-        hass.services.register(DOMAIN, 'connect', connection.tcp_switch_connect)
-        hass.services.register(DOMAIN, 'disconnect', connection.tcp_switch_disconnect)
+        if manager.channels:
+            devices = []
+            for channel in manager.channels:
+                device = TcpSwitch(manager, channel)
+                devices.append(device)
 
-        hass.bus.listen_once(EVENT_HOMEASSISTANT_START, connection.tcp_switch_connect)
-        hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, connection.tcp_switch_disconnect)
+            # register service
+            hass.services.register(DOMAIN, SERVICE_RECONNECT, manager.connect)
 
-        # register scan interval for Home Automation Manager (HAM)
-        track_time_interval(hass, tcp_switch_refresh, scan_interval)
+            hass.bus.listen_once(EVENT_HOMEASSISTANT_START, manager.connect)
+            hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, manager.disconnect)
 
-        return True
+            # register scan interval for Home Automation Manager (HAM)
+            track_time_interval(hass, ts_update, SCAN_INTERVAL)
+
+            add_entities(devices, True)
+
+            is_initialized = True
 
     except Exception as ex:
         _LOGGER.error(f'Errors while loading configuration due to exception: {str(ex)}')
 
-        return False
+    return is_initialized
 
 
 class TcpSwitch(SwitchDevice):
@@ -73,7 +74,7 @@ class TcpSwitch(SwitchDevice):
 
     def __init__(self, connection, channel):
         """Initialize the Vera device."""
-        self._channel = channel + 1
+        self._channel = channel
         self._connection = connection
         self._switch_name = self._connection.switch_name
         self._state = False

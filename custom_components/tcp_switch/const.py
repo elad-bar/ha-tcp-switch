@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-VERSION = '1.0.11'
+VERSION = '1.0.12'
 
 BUFFER = 1024
 SCAN_INTERVAL = timedelta(seconds=60)
@@ -15,6 +15,7 @@ CONF_CHANNELS = 'channels'
 CONF_MOMENTARY_DELAY = 'momentary_delay'
 NAME = "TCP Switch"
 
+SERVICE_RECONNECT = 'reconnect'
 
 TURN_ON = 1
 TURN_OFF = 2
