@@ -107,34 +107,30 @@ class TcpSwitch(SwitchDevice):
 
     def connect(self):
         try:
-            _LOGGER.debug("Connecting")
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._socket.connect((self._server_name, self._server_port))
-            self._connected = True
+            if not self._connected:
+                _LOGGER.info(f"Connecting to {self._host_details}")
+                self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._socket.connect((self._server_name, self._server_port))
+                self._connected = True
+                _LOGGER.info(f"{self._host_details} connected")
 
         except Exception as ex:
-            host = f'{self._server_name}:{self._server_port}'
-            error_message = f'Failed to connect {self._host_details}, Error: {str(ex)}'
-
-            _LOGGER.error(error_message)
+            _LOGGER.error(f'Failed to connect {self._host_details}, Error: {str(ex)}')
             self._connected = False
-
-        _LOGGER.debug("Connected")
 
     def disconnect(self):
         try:
-            _LOGGER.debug("Disconnecting")
+            _LOGGER.info(f"Disconnecting from {self._host_details}")
             self._socket.close()
 
         except Exception as ex:
-            host = f'{self._server_name}:{self._server_port}'
-            error_message = f'Failed to disconnect {self._host_details}, Error: {str(ex)}'
-            _LOGGER.error(error_message)
+            _LOGGER.error(f'Failed to disconnect {self._host_details}, Error: {str(ex)}')
 
         finally:
             self._socket = None
             self._connected = False
-            _LOGGER.debug("Disconnected")
+
+            _LOGGER.info(f"{self._host_details} connection terminated")
 
     def turn_on(self, **kwargs):
         """Turn device on."""
@@ -169,9 +165,9 @@ class TcpSwitch(SwitchDevice):
 
     def send_tcp_message(self, message):
         result = None
-        try:
-            error_message = f'Cannot send {self._host_details} message: {message}'
+        error_message = f'Cannot send {self._host_details} message: {message}'
 
+        try:
             if not self.is_connected:
                 self.connect()
 
@@ -195,6 +191,8 @@ class TcpSwitch(SwitchDevice):
                 _LOGGER.error(f'{error_message}')
 
         except Exception as ex:
+            self.disconnect()
+
             _LOGGER.error(f'{error_message}, Error: {str(ex)}')
 
         return result
