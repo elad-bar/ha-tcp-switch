@@ -141,7 +141,7 @@ class TcpSwitchConnection:
         self._skt.send(message.encode(ENCODING))
         result = self._skt.recv(1024).decode(ENCODING)
 
-        _LOGGER.info(f"Response of message {message} (#{retry}): {result}")
+        _LOGGER.debug(f"Response of message {message} (#{retry}): {result}")
 
         if result == '':
             result = None
