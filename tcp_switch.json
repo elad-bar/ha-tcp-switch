@@ -1,6 +1,6 @@
 {
     "tcp_switch": {
-        "version": "1.0.1",
+        "version": "1.0.2",
         "local_location": "/custom_components/tcp_switch/__init__.py",
         "remote_location": "https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/custom_components/tcp_switch/__init__.py",
         "visit_repo": "https://github.com/elad-bar/ha-tcp-switch",
