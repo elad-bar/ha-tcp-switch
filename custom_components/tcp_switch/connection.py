@@ -115,8 +115,7 @@ class TcpSwitchConnection:
         result = self._send_message(STATUS_COMMAND)
 
         if result is not None:
-            value = result.decode(ENCODING)
-            channel_status = value[channel]
+            channel_status = result[channel]
 
             status = channel_status == str(TURN_ON)
 
@@ -132,15 +131,17 @@ class TcpSwitchConnection:
     def _send_message(self, message, retry=0):
 
         if retry == 0:
-            _LOGGER.info(f"Starting to send message: {message}")
+            _LOGGER.debug(f"Starting to send message: {message}")
         else:
-            _LOGGER.info(f"Resending message (#{retry}): {message}")
+            _LOGGER.debug(f"Resending message (#{retry}): {message}")
 
         if not self._connected:
             self.connect()
 
         self._skt.send(message.encode(ENCODING))
-        result = self._skt.recv(1024)
+        result = self._skt.recv(1024).decode(ENCODING)
+
+        _LOGGER.info(f"Response of message {message} (#{retry}): {result}")
 
         if result == '':
             result = None

@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-VERSION = '1.0.9'
+VERSION = '1.0.10'
 
 BUFFER = 1024
 SCAN_INTERVAL = timedelta(seconds=60)
