@@ -104,7 +104,7 @@ class TcpSwitchConnection:
 
         _LOGGER.info(f"CH#{channel} - {ACTION_DESCRIPTION[action]}{duration} @{self._details}")
 
-        result = self._send_message(f"{message}")
+        result = self._send_message(message)
 
         sleep(self._momentary_delay)
 
@@ -132,9 +132,9 @@ class TcpSwitchConnection:
     def _send_message(self, message, retry=0):
 
         if retry == 0:
-            _LOGGER.debug(f"Starting to send message: {message}")
+            _LOGGER.info(f"Starting to send message: {message}")
         else:
-            _LOGGER.debug(f"Resending message (#{retry}): {message}")
+            _LOGGER.info(f"Resending message (#{retry}): {message}")
 
         if not self._connected:
             self.connect()
@@ -142,13 +142,16 @@ class TcpSwitchConnection:
         self._skt.send(message.encode(ENCODING))
         result = self._skt.recv(1024)
 
-        if result is None or result == '':
+        if result == '':
+            result = None
+
+        if result is None:
             _LOGGER.debug(f"Invalid response from {self._details}")
             self.disconnect()
 
             retry = retry + 1
 
-            if retry <= MAX_RETRIES:
+            if retry > MAX_RETRIES:
                 result = self._send_message(message, retry)
 
         return result
