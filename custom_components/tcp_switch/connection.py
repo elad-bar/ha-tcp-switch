@@ -123,6 +123,7 @@ class TcpSwitchConnection:
 
     def _send_message(self, message, retry=0):
         result = None
+        failure_reason = None
 
         if retry == 0:
             _LOGGER.debug(f"Starting to send message: {message}")
@@ -142,10 +143,12 @@ class TcpSwitchConnection:
             _LOGGER.debug(f"Response of message {message} (#{retry}): {result}")
 
         except Exception as ex:
-            _LOGGER.warning(f"Failed to extract result for message: {message}, Error: {str(ex)}")
+            failure_reason = str(ex)
 
         if not result:
             _LOGGER.debug(f"Invalid response from {self._details}")
+
+            self._disconnect()
 
             retry = retry + 1
 
@@ -154,6 +157,9 @@ class TcpSwitchConnection:
             else:
                 result = None
 
-                _LOGGER.error(f"Maximum retries exceeded for message: {message}")
+                if failure_reason:
+                    failure_reason = f", Error: {failure_reason}"
+
+                _LOGGER.error(f"Maximum retries exceeded for message: {message}{failure_reason}")
 
         return result
