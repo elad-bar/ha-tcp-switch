@@ -73,7 +73,7 @@ class TcpSwitch(SwitchDevice):
 
     def __init__(self, connection, channel):
         """Initialize the Vera device."""
-        self._channel = channel
+        self._channel = channel + 1
         self._connection = connection
         self._switch_name = self._connection.switch_name
         self._state = False
@@ -93,7 +93,7 @@ class TcpSwitch(SwitchDevice):
     @property
     def name(self):
         """Return the name of this camera."""
-        return f'{self._switch_name} CH{self._channel + 1}'
+        return f'{self._switch_name} CH{self._channel}'
 
     @property
     def is_on(self):
