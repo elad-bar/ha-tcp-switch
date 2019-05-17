@@ -6,6 +6,7 @@ https://home-assistant.io/components/switch.vera/
 import logging
 import socket
 
+from time import sleep
 from homeassistant.const import (CONF_NAME, CONF_HOST, CONF_PORT)
 
 from .const import *
@@ -15,32 +16,20 @@ _LOGGER = logging.getLogger(__name__)
 
 class TcpSwitchConnection:
     def __init__(self, config):
-        self._scan_interval = SCAN_INTERVAL
-
         try:
             self._switch_name = config.get(CONF_NAME)
-            self._server_name = config.get(CONF_HOST)
-            self._server_port = config.get(CONF_PORT)
-            self._momentary_delay = config.get(CONF_MOMENTARY_DELAY)
             self._channels = config.get(CONF_CHANNELS)
-            self._scan_interval_seconds = self._scan_interval.total_seconds()
-            self._data = None
 
-            self._socket = None
+            self._hostname = config.get(CONF_HOST)
+            self._port = config.get(CONF_PORT)
+            self._momentary_delay = config.get(CONF_MOMENTARY_DELAY)
+
+            self._details = f"TCP Switch {self._hostname}:{self._port}"
+
+            self._skt = None
             self._connected = False
-            self._connecting = False
 
-            self._host_details = f'TCP Switch {self._server_name}:{self._server_port}'
-
-            if 0 < self._momentary_delay < self._scan_interval_seconds:
-                self._scan_interval = timedelta(seconds=self._momentary_delay)
-
-            _LOGGER.info(f'Initializing {self._switch_name} - {self._host_details} with {self._channels} channels')
-
-            def tcp_switch_refresh(event_time):
-                """Call TCP Switch to refresh information."""
-                _LOGGER.debug(f'Updating TCP Switch, at {event_time}')
-                self.update_status()
+            _LOGGER.info(f'Initializing {self._switch_name} - {self._details} with {self._channels} channels')
 
             def tcp_switch_connect(event_time):
                 """Call TCP Switch to connect and update."""
@@ -54,7 +43,6 @@ class TcpSwitchConnection:
 
             self.tcp_switch_connect = tcp_switch_connect
             self.tcp_switch_disconnect = tcp_switch_disconnect
-            self.tcp_switch_refresh = tcp_switch_refresh
 
         except Exception as ex:
             _LOGGER.error(f'Errors while loading configuration due to exception: {str(ex)}')
@@ -67,97 +55,100 @@ class TcpSwitchConnection:
     def switch_name(self):
         return self._switch_name
 
-    @property
-    def scan_interval(self):
-        return self._scan_interval
-
     def connect(self):
         try:
-            if not self._connected and not self._connecting:
-                self._connecting = True
+            _LOGGER.debug(f"Connecting to {self._details}")
 
-                _LOGGER.info(f"Connecting to {self._host_details}")
+            self._skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._skt.connect((self._hostname, self._port))
+            self._connected = True
 
-                self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._socket.connect((self._server_name, self._server_port))
-                self._connected = True
-
-                _LOGGER.info(f"{self._host_details} connected")
+            _LOGGER.debug(f"Connection to {self._details} available")
 
         except Exception as ex:
-            _LOGGER.error(f'Failed to connect {self._host_details}, Error: {str(ex)}')
-            self._connected = False
-        finally:
-            self._connecting = False
+            _LOGGER.error(f"Failed to connect to {self._details}, Error: {str(ex)}")
+            self.disconnect()
 
     def disconnect(self):
         try:
-            _LOGGER.info(f"Disconnecting from {self._host_details}")
-            self._socket.close()
+            if self._skt is not None:
+                _LOGGER.debug(f"Terminating connection from {self._details}")
 
+                self._skt.close()
+
+                _LOGGER.debug(f"Connection from {self._details} terminated")
         except Exception as ex:
-            _LOGGER.error(f'Failed to disconnect {self._host_details}, Error: {str(ex)}')
+            _LOGGER.error(f"Failed to disconnect from {self._details}, Error: {str(ex)}")
 
         finally:
-            self._socket = None
             self._connected = False
+            self._skt = None
 
-            _LOGGER.info(f"{self._host_details} connection terminated")
-
-    def send_tcp_message(self, message):
-        error_message = f'Cannot send {self._host_details} message: {message}'
-
-        result = None
-
-        try:
-
-            if not self._connecting:
-                if not self._connected:
-                    self.connect()
-
-                if self._connected:
-                    _LOGGER.debug(f'Sending {message}')
-
-                    self._socket.send(message.encode('utf-8'))
-
-                    _LOGGER.debug("Getting data")
-
-                    result = str(self._socket.recv(BUFFER))
-                else:
-                    _LOGGER.error(f'{error_message}')
-
-        except Exception as ex:
-            _LOGGER.error(f'{error_message}, Error: {str(ex)}')
+    def turn_on(self, channel):
+        result = self._toggle(channel, TURN_ON)
 
         return result
 
-    def update_status(self):
-        msg = STATUS_COMMAND
+    def turn_off(self, channel):
+        result = self._toggle(channel, TURN_OFF)
 
-        self._data = self.send_tcp_message(msg)
+        return result
 
-    def toggle(self, turn_on, channel):
-        cmd = '2'
-        delay = ""
-
-        if turn_on:
-            cmd = '1'
+    def _toggle(self, channel, action):
+        message = f"{action}{channel}"
+        duration = ""
 
         if self._momentary_delay > 0:
-            delay = f':{self._momentary_delay}'
+            duration = f"({self._momentary_delay} seconds)"
+            message = f"{message}:{self._momentary_delay}"
 
-        msg = f'{cmd}{str(channel)}{delay}'
+        _LOGGER.info(f"CH#{channel} - {ACTION_DESCRIPTION[action]}{duration} @{self._details}")
 
-        self._data = self.send_tcp_message(msg)
+        result = self._send_message(f"{message}")
+
+        sleep(self._momentary_delay)
+
+        return result
 
     def get_status(self, channel):
-        result = False
+        status = False
+        result = self._send_message(STATUS_COMMAND)
 
-        if self._data is not None:
-            _LOGGER.debug(f'Parsing {self._data}')
+        if result is not None:
+            value = result.decode(ENCODING)
+            channel_status = value[channel]
 
-            status = self._data[channel]
+            status = channel_status == str(TURN_ON)
 
-            result = status == "1"
+        return status
+
+    def get_status_description(self, channel):
+        status = self.get_status(channel)
+
+        result = f"Channel #{channel}: {status}"
+
+        return result
+
+    def _send_message(self, message, retry=0):
+
+        if retry == 0:
+            _LOGGER.debug(f"Starting to send message: {message}")
+        else:
+            _LOGGER.debug(f"Resending message (#{retry}): {message}")
+
+        if not self._connected:
+            self.connect()
+
+        self._skt.send(message.encode(ENCODING))
+        result = self._skt.recv(1024)
+
+        if result is None or result == '':
+            _LOGGER.debug(f"Invalid response from {self._details}")
+            self.disconnect()
+
+            retry = retry + 1
+
+            if retry <= MAX_RETRIES:
+                result = self._send_message(message, retry)
 
         return result

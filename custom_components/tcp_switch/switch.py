@@ -9,7 +9,6 @@ import voluptuous as vol
 from homeassistant.components.switch import SwitchDevice, DOMAIN
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 import homeassistant.helpers.config_validation as cv
-from homeassistant.util import slugify
 
 from homeassistant.const import (CONF_NAME, CONF_HOST, CONF_PORT,
                                  EVENT_HOMEASSISTANT_START,
@@ -35,6 +34,8 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
     try:
         _LOGGER.info(f'Loading configuration of TCP Switch, DI: {discovery_info}')
 
+        scan_interval = SCAN_INTERVAL
+
         connection = TcpSwitchConnection(config)
 
         devices = []
@@ -44,15 +45,20 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
 
         add_entities(devices, True)
 
+        def tcp_switch_refresh(event_time):
+            _LOGGER.debug(f"Updating TCP Switch ({event_time})")
+            for switch in devices:
+                switch.update()
+
         # register service
-        hass.services.register(slugify(NAME), 'connect', connection.tcp_switch_connect)
-        hass.services.register(slugify(NAME), 'disconnect', connection.tcp_switch_disconnect)
+        hass.services.register(DOMAIN, 'connect', connection.tcp_switch_connect)
+        hass.services.register(DOMAIN, 'disconnect', connection.tcp_switch_disconnect)
 
         hass.bus.listen_once(EVENT_HOMEASSISTANT_START, connection.tcp_switch_connect)
         hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, connection.tcp_switch_disconnect)
 
         # register scan interval for Home Automation Manager (HAM)
-        track_time_interval(hass, connection.tcp_switch_refresh, connection.scan_interval)
+        track_time_interval(hass, tcp_switch_refresh, scan_interval)
 
         return True
 
@@ -74,13 +80,13 @@ class TcpSwitch(SwitchDevice):
 
     def turn_on(self, **kwargs):
         """Turn device on."""
-        self._connection.toggle(True, self._channel)
+        self._connection.turn_on(self._channel)
 
         self.schedule_update_ha_state()
 
     def turn_off(self, **kwargs):
         """Turn device off."""
-        self._connection.toggle(False, self._channel)
+        self._connection.turn_off(self._channel)
 
         self.schedule_update_ha_state()
 
