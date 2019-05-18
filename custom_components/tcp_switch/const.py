@@ -1,8 +1,8 @@
 from datetime import timedelta
 
-VERSION = '1.0.13'
+VERSION = '1.0.14'
 
-BUFFER = 1024
+BUFFER = 4096
 SCAN_INTERVAL = timedelta(seconds=60)
 DEFAULT_PORT = 6722
 DEFAULT_CHANNELS = 2

@@ -26,23 +26,7 @@ class TcpSwitchConnection:
 
             self._details = f"{NAME} {self._hostname}:{self._port}"
 
-            self._skt = None
-            self._connected = False
-
             _LOGGER.info(f'Initializing {self._switch_name} - {self._details} with {self._channels} channels')
-
-            def tcp_switch_connect(event_time):
-                """Call TCP Switch to connect and update."""
-                _LOGGER.debug(f'Connecting and updating {NAME}, at {event_time}')
-                self._connect()
-
-            def tcp_switch_disconnect(event_time):
-                """Call TCP Switch to disconnect."""
-                _LOGGER.debug(f'Disconnecting {NAME}, at {event_time}')
-                self._disconnect()
-
-            self.connect = tcp_switch_connect
-            self.disconnect = tcp_switch_disconnect
 
         except Exception as ex:
             _LOGGER.error(f'Errors while loading configuration due to exception: {str(ex)}')
@@ -54,37 +38,6 @@ class TcpSwitchConnection:
     @property
     def switch_name(self):
         return self._switch_name
-
-    def _connect(self):
-        try:
-            _LOGGER.debug(f"Connecting to {self._details}")
-
-            self._disconnect()
-
-            self._skt = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._skt.connect((self._hostname, self._port))
-            self._connected = True
-
-            _LOGGER.debug(f"Connection to {self._details} available")
-
-        except Exception as ex:
-            _LOGGER.error(f"Failed to connect to {self._details}, Error: {str(ex)}")
-            self._disconnect()
-
-    def _disconnect(self):
-        try:
-            if self._skt:
-                _LOGGER.debug(f"Terminating connection from {self._details}")
-
-                self._skt.close()
-
-                _LOGGER.debug(f"Connection from {self._details} terminated")
-        except Exception as ex:
-            _LOGGER.error(f"Failed to disconnect from {self._details}, Error: {str(ex)}")
-
-        finally:
-            self._connected = False
-            self._skt = None
 
     def turn_on(self, channel):
         result = self._toggle(channel, TURN_ON)
@@ -130,15 +83,14 @@ class TcpSwitchConnection:
         else:
             _LOGGER.debug(f"Resending message (#{retry}): {message}")
 
-        if not self._connected:
-            self._connect()
-
         try:
-            self._skt.send(message.encode(ENCODING))
-            result_data = self._skt.recv(BUFFER)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as skt:
+                skt.connect((self._hostname, self._port))
+                skt.send(message.encode(ENCODING))
+                result_data = skt.recv(BUFFER)
 
-            if result_data is not None:
-                result = result_data.decode(ENCODING)
+                if result_data is not None:
+                    result = result_data.decode(ENCODING)
 
             _LOGGER.debug(f"Response of message {message} (#{retry}): {result}")
 
@@ -147,8 +99,6 @@ class TcpSwitchConnection:
 
         if not result:
             _LOGGER.debug(f"Invalid response from {self._details}")
-
-            self._disconnect()
 
             retry = retry + 1
 

@@ -6,13 +6,12 @@ https://home-assistant.io/components/switch.vera/
 import logging
 
 import voluptuous as vol
-from homeassistant.components.switch import SwitchDevice, DOMAIN
+from homeassistant.components.switch import SwitchDevice
 from homeassistant.helpers.config_validation import PLATFORM_SCHEMA
 import homeassistant.helpers.config_validation as cv
 
 from homeassistant.const import (CONF_NAME, CONF_HOST, CONF_PORT,
-                                 EVENT_HOMEASSISTANT_START,
-                                 EVENT_HOMEASSISTANT_STOP)
+                                 EVENT_HOMEASSISTANT_START)
 from homeassistant.helpers.event import track_time_interval
 
 from .const import *
@@ -50,11 +49,7 @@ def setup_platform(hass, config, add_entities, discovery_info=None):
                 device = TcpSwitch(manager, channel)
                 devices.append(device)
 
-            # register service
-            hass.services.register(DOMAIN, SERVICE_RECONNECT, manager.connect)
-
-            hass.bus.listen_once(EVENT_HOMEASSISTANT_START, manager.connect)
-            hass.bus.listen_once(EVENT_HOMEASSISTANT_STOP, manager.disconnect)
+            hass.bus.listen_once(EVENT_HOMEASSISTANT_START, ts_update)
 
             # register scan interval for Home Automation Manager (HAM)
             track_time_interval(hass, ts_update, SCAN_INTERVAL)
