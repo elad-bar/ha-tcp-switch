@@ -1,2 +1,0 @@
-reconnect:
-  description: "Creates TCP Switch socket connection"

@@ -8,7 +8,6 @@
         "resources": [
             "https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/custom_components/tcp_switch/const.py",
             "https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/custom_components/tcp_switch/manifest.json",
-            "https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/custom_components/tcp_switch/services.yaml",
             "https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/custom_components/tcp_switch/switch.py",
             "https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/custom_components/tcp_switch/connection.py"
         ]
