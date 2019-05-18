@@ -19,3 +19,19 @@ configuration:
         channels: # List of numbers of channels you would like to control (up to 255)
           - 1
 ```
+
+## Track Updates
+
+This custom card can be tracked with the help of custom-updater.
+
+In your configuration.yaml
+
+```yaml
+configuration:
+    custom_updater:
+      track:
+        - components
+      component_urls:
+        - https://raw.githubusercontent.com/elad-bar/ha-tcp-switch/master/tcp_switch.json
+```
+
