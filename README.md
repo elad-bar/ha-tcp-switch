@@ -15,8 +15,9 @@ configuration:
       - platform: tcp_switch
         name: Name for component
         host: hostname # or IP
-        momentary_delay: 0 # 0-65356 - Number of seconds before doing the opposite action 
-        channels: # List of numbers of channels you would like to control (up to 255)
+        port: port # Optional - default 6722
+        momentary_delay: 0 # Optional (0-65356) - default 0 - Number of seconds before doing the opposite action 
+        channels: # Optional - default none - List of channels to control (up to 255)
           - 1
 ```
 
